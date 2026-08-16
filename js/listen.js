@@ -88,6 +88,11 @@
   var introStartedAt = 0;
   var clockIncludesIntro = false;
   var introRaf = 0;
+  var VOICE_IN_MS = 2000;
+  var VOICE_OUT_SEC = 5.2;
+  var OUTRO_BED_VOL = 0.2;
+  var voiceFade = 0;
+  var outroStarted = false;
 
   var playBtn = document.getElementById('play');
   var playIcon = document.getElementById('play-icon');
@@ -148,6 +153,49 @@
     try { localStorage.setItem(SPEED_KEY, String(speed)); } catch (e) { /* ignore */ }
   }
 
+  function fadeVoice(to, ms) {
+    if (voiceFade) cancelAnimationFrame(voiceFade);
+    var from = audio.volume;
+    var start = performance.now();
+    function step(now) {
+      var p = Math.min(1, (now - start) / Math.max(1, ms));
+      var eased = p * p * (3 - 2 * p);
+      audio.volume = Math.max(0, Math.min(1, from + (to - from) * eased));
+      if (p < 1) voiceFade = requestAnimationFrame(step);
+    }
+    voiceFade = requestAnimationFrame(step);
+  }
+
+  function beginVoice(fadeIn) {
+    if (fadeIn) audio.volume = 0;
+    else audio.volume = 1;
+    return audio.play().then(function () {
+      setPlaying(true);
+      if (fadeIn) fadeVoice(1, VOICE_IN_MS);
+      paintTime();
+    }).catch(function () {});
+  }
+
+  function resetOutroState() {
+    outroStarted = false;
+    if (voiceFade) {
+      cancelAnimationFrame(voiceFade);
+      voiceFade = 0;
+    }
+    audio.volume = 1;
+  }
+
+  function maybeStartOutro() {
+    if (outroStarted || seeking || !audio.duration || audio.paused) return;
+    var left = audio.duration - audio.currentTime;
+    if (left > VOICE_OUT_SEC) return;
+    outroStarted = true;
+    fadeVoice(0, Math.max(900, left * 1000));
+    if (!bed) return;
+    bed.currentTime = 0;
+    fadeBed(OUTRO_BED_VOL, 1600);
+  }
+
   function fadeBed(to, ms) {
     if (!bed) return;
     if (bedFade) cancelAnimationFrame(bedFade);
@@ -193,6 +241,7 @@
     document.body.classList.remove('is-intro');
     if (creditsEl) creditsEl.classList.remove('is-dim');
     fadeBed(0, 350);
+    resetOutroState();
     paintTime();
   }
 
@@ -235,13 +284,11 @@
     if (creditsEl) creditsEl.classList.remove('is-dim');
     if (lineEl && creditsEl) lineEl.hidden = true;
     fadeBed(0, 2600);
-    audio.play().then(function () {
-      setPlaying(true);
-      paintTime();
-    }).catch(function () {});
+    beginVoice(true);
   }
 
   function startIntro() {
+    resetOutroState();
     introPlaying = true;
     clockIncludesIntro = true;
     introStartedAt = performance.now();
@@ -264,11 +311,13 @@
   function playOutro() {
     if (!bed) return;
     clearBedTimers();
-    bed.currentTime = 0;
-    fadeBed(0.18, 1600);
+    if (!outroStarted || bed.paused) {
+      bed.currentTime = 0;
+      fadeBed(OUTRO_BED_VOL, 1600);
+    }
     outroTimer = setTimeout(function () {
-      fadeBed(0, 2400);
-    }, 8200);
+      fadeBed(0, 2800);
+    }, outroStarted ? 5600 : 8200);
   }
 
   function toggle() {
@@ -284,14 +333,15 @@
       clearBedTimers();
       if (bed && !introPlaying && bed.volume > 0.01) fadeBed(0, 280);
       if (bed && !introDone && audio.currentTime < 2.5) {
+        resetOutroState();
         startIntro();
         return;
       }
-      audio.play().then(function () {
-        setPlaying(true);
-      }).catch(function () {});
+      if (outroStarted && bed && bed.paused) bed.play().catch(function () {});
+      beginVoice(audio.currentTime < 2.5);
     } else {
       audio.pause();
+      if (bed && outroStarted) bed.pause();
       setPlaying(false);
     }
   }
@@ -314,6 +364,11 @@
       }
     } else if (audio.duration) {
       audio.currentTime = t;
+    }
+    var left = audio.duration ? audio.duration - audio.currentTime : 0;
+    if (left > VOICE_OUT_SEC) {
+      resetOutroState();
+      if (bed && !introPlaying) fadeBed(0, 400);
     }
     syncLine();
     paintTime();
@@ -730,6 +785,7 @@
     persistPosition();
     syncLine();
     checkSleep();
+    maybeStartOutro();
     if (!audio.duration) return;
     var pct = Math.floor((audio.currentTime / audio.duration) * 100);
     [25, 50, 75].forEach(function (mark) {
