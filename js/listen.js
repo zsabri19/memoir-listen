@@ -51,7 +51,9 @@
   if (!root) return;
 
   var src = root.getAttribute('data-src');
-  if (src && src.indexOf('?') === -1) src += '?v=talk1';
+  if (src && src.indexOf('/assets/audio/v2/') === -1) {
+    src = src.replace('/assets/audio/', '/assets/audio/v2/');
+  }
   var spokenSrc = root.getAttribute('data-spoken');
   var title = root.getAttribute('data-title') || 'This chapter';
   var kicker = root.getAttribute('data-kicker') || '';

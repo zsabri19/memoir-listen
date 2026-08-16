@@ -2,3 +2,5 @@
   X-Robots-Tag: noindex, nofollow
 /assets/audio/*
   Cache-Control: public, max-age=300, must-revalidate
+/assets/audio/v2/*
+  Cache-Control: public, max-age=300, must-revalidate
