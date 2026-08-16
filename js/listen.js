@@ -6,6 +6,12 @@
 (function () {
   'use strict';
 
+  if (location.hostname === 'zsabri19.github.io') {
+    var dest = location.pathname.replace(/^\/memoir-listen/, '') || '/';
+    location.replace('https://listen.global-mkts.com' + dest + location.search + location.hash);
+    return;
+  }
+
   var GA_ID = 'G-Z9BFJP96Q4';
   var chapterId = (function () {
     var parts = location.pathname.replace(/\/+$/, '').split('/');
