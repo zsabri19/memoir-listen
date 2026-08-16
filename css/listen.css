@@ -134,11 +134,30 @@ body.listen-page {
   color: var(--muted);
 }
 
+.listen-why {
+  margin-top: 16px;
+  max-width: 34ch;
+  font-family: var(--font-display);
+  font-style: italic;
+  font-size: 17px;
+  line-height: 1.4;
+  color: rgba(245, 241, 232, 0.78);
+}
+
+.listen-length {
+  margin-top: 10px;
+  font-family: var(--font-display);
+  font-variant: small-caps;
+  letter-spacing: 0.18em;
+  font-size: 12px;
+  color: var(--gold);
+}
+
 .listen-play {
   position: relative;
   width: 88px;
   height: 88px;
-  margin: 36px 0 28px;
+  margin: 28px 0 22px;
   border: 0;
   border-radius: 50%;
   cursor: pointer;
@@ -268,16 +287,132 @@ body.is-playing .listen-play-ring {
   color: var(--gold);
 }
 
+.listen-now {
+  margin-top: 22px;
+  font-family: var(--font-display);
+  font-variant: small-caps;
+  letter-spacing: 0.22em;
+  font-size: 11px;
+  color: var(--gold);
+}
+
 .listen-line {
-  margin-top: 28px;
+  margin-top: 8px;
   max-width: 36ch;
   font-family: var(--font-display);
   font-style: italic;
   font-size: 18px;
   line-height: 1.4;
   color: rgba(246, 231, 171, 0.88);
-  min-height: 5.6em;
+  min-height: 2.8em;
 }
+
+.listen-marks {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 8px;
+  width: 100%;
+  margin-top: 18px;
+}
+
+.listen-mark {
+  min-height: 36px;
+  padding: 6px 12px;
+  border-radius: 999px;
+  border: 1px solid rgba(245, 241, 232, 0.16);
+  background: transparent;
+  color: rgba(245, 241, 232, 0.78);
+  font-family: var(--font-display);
+  font-size: 13px;
+  letter-spacing: 0.02em;
+  cursor: pointer;
+}
+
+.listen-mark:hover,
+.listen-mark.is-active {
+  color: var(--gold);
+  border-color: rgba(212, 175, 55, 0.5);
+}
+
+.listen-sleeps {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 2px;
+  margin-top: 14px;
+  padding: 4px;
+  border: 1px solid rgba(245, 241, 232, 0.1);
+  border-radius: 999px;
+  background: rgba(10, 16, 28, 0.25);
+}
+
+.listen-sleeps-label,
+.listen-sleep-left {
+  font-family: var(--font-display);
+  font-variant: small-caps;
+  letter-spacing: 0.16em;
+  font-size: 11px;
+  color: var(--muted);
+  padding: 0 8px 0 12px;
+}
+
+.listen-sleep-left {
+  color: var(--gold);
+  padding-right: 12px;
+}
+
+.listen-sleep {
+  min-width: 44px;
+  min-height: 34px;
+  border: 0;
+  border-radius: 999px;
+  background: transparent;
+  color: rgba(245, 241, 232, 0.68);
+  font-family: var(--font-display);
+  font-size: 13px;
+  cursor: pointer;
+}
+
+.listen-sleep.is-active {
+  background: rgba(212, 175, 55, 0.2);
+  color: var(--gold);
+}
+
+.listen-end {
+  margin-top: 22px;
+  max-width: 32ch;
+}
+
+.listen-end h2 {
+  font-family: var(--font-display);
+  font-weight: 600;
+  font-size: 22px;
+  margin-bottom: 8px;
+}
+
+.listen-end p {
+  font-family: var(--font-display);
+  font-style: italic;
+  font-size: 16px;
+  line-height: 1.4;
+  color: rgba(245, 241, 232, 0.78);
+}
+
+.listen-end a {
+  display: inline-block;
+  margin-top: 14px;
+  color: var(--gold);
+  text-decoration: none;
+  font-family: var(--font-display);
+  font-variant: small-caps;
+  letter-spacing: 0.16em;
+  font-size: 13px;
+  border-bottom: 1px solid rgba(212, 175, 55, 0.4);
+}
+
+.listen-end a:hover { color: var(--gold-soft); }
 
 .listen-hint {
   margin-top: auto;

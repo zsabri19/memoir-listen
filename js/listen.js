@@ -1,6 +1,7 @@
 /* ============================================================
-   Audio-only player. Chapter 14 test.
-   Same speed / position keys as the chapter Listen bar.
+   Audio-only player.
+   Extra demo controls (length, sections, sleep, end card)
+   activate only when those elements exist on the page.
    ============================================================ */
 (function () {
   'use strict';
@@ -37,8 +38,15 @@
   var elapsedEl = document.getElementById('elapsed');
   var remainEl = document.getElementById('remain');
   var lineEl = document.getElementById('line');
+  var lengthEl = document.getElementById('length');
+  var sectionsEl = document.getElementById('sections');
+  var endCard = document.getElementById('endcard');
+  var nowEl = document.getElementById('now');
+  var sleepLabel = document.getElementById('sleep-left');
   var segments = [];
-  var wakeLock = null;
+  var activeSeg = null;
+  var sleepUntil = 0;
+  var sleepMins = 0;
 
   paintSpeed();
 
@@ -57,8 +65,8 @@
     playIcon.textContent = on ? '❚❚' : '▶';
     playBtn.setAttribute('aria-label', on ? 'Pause' : 'Play');
     document.body.classList.toggle('is-playing', on);
-    if (on) requestWake();
-    else releaseWake();
+    if (on && endCard) endCard.hidden = true;
+    if (on && nowEl) nowEl.hidden = false;
   }
 
   function paintSpeed() {
@@ -135,6 +143,12 @@
     fill.style.width = ((audio.currentTime / audio.duration) * 100).toFixed(2) + '%';
   }
 
+  function paintLength() {
+    if (!lengthEl || !audio.duration) return;
+    var mins = Math.max(1, Math.round(audio.duration / 60));
+    lengthEl.textContent = mins === 1 ? 'About 1 minute' : 'About ' + mins + ' minutes';
+  }
+
   function stampTimes(nodes) {
     var total = 0;
     for (var t = 0; t < nodes.length; t++) total += nodes[t].words;
@@ -147,6 +161,20 @@
     return nodes;
   }
 
+  function spokenLine(seg) {
+    if (seg.quote) return seg.quote.replace(/\s+/g, ' ').trim().replace(/^"|"$/g, '');
+    var t = (seg.text || '').replace(/\s+/g, ' ').trim();
+    if (seg.kind === 'title' || seg.kind === 'h2') return t.replace(/\.$/, '');
+    var m = t.match(/^(.{12,}?[.!?])(?:\s|$)/);
+    var line = m ? m[1] : t;
+    if (line.length > 160) {
+      var cut = line.slice(0, 157);
+      var sp = cut.lastIndexOf(' ');
+      line = (sp > 80 ? cut.slice(0, sp) : cut) + '…';
+    }
+    return line;
+  }
+
   function loadSpoken() {
     if (!spokenSrc) return;
     window.__MEMOIR_SPOKEN__ = null;
@@ -157,8 +185,14 @@
       if (s.parentNode) s.parentNode.removeChild(s);
       if (!data || !data.segments) return;
       segments = stampTimes(data.segments.map(function (spec) {
-        return { words: spec.words || 1, text: spec.text || '', kind: spec.kind };
+        return {
+          words: spec.words || 1,
+          text: spec.text || '',
+          kind: spec.kind,
+          quote: spec.highlights && spec.highlights[0] ? spec.highlights[0].text : ''
+        };
       }));
+      paintSections();
       syncLine();
     };
     s.onerror = function () {
@@ -167,8 +201,57 @@
     document.head.appendChild(s);
   }
 
+  function paintSections() {
+    if (!sectionsEl) return;
+    sectionsEl.innerHTML = '';
+    var marks = [];
+    for (var i = 0; i < segments.length; i++) {
+      if (segments[i].kind === 'title' || segments[i].kind === 'h2') marks.push(segments[i]);
+    }
+    if (!marks.length) {
+      sectionsEl.hidden = true;
+      return;
+    }
+    sectionsEl.hidden = false;
+    for (var m = 0; m < marks.length; m++) {
+      var btn = document.createElement('button');
+      btn.type = 'button';
+      btn.className = 'listen-mark';
+      btn.textContent = (marks[m].text || '').replace(/\.$/, '');
+      btn.setAttribute('data-start', String(marks[m].start));
+      btn.addEventListener('click', seekToMark);
+      sectionsEl.appendChild(btn);
+    }
+  }
+
+  function seekToMark() {
+    if (!audio.duration) return;
+    var start = parseFloat(this.getAttribute('data-start'));
+    if (!isFinite(start)) return;
+    audio.currentTime = Math.max(0, start * audio.duration + 0.05);
+    if (audio.paused) {
+      audio.play().then(function () { setPlaying(true); }).catch(function () {});
+    }
+    syncLine();
+  }
+
+  function paintActiveMark(seg) {
+    if (!sectionsEl) return;
+    var marks = sectionsEl.querySelectorAll('.listen-mark');
+    var current = null;
+    for (var i = 0; i < segments.length; i++) {
+      if (segments[i].kind === 'title' || segments[i].kind === 'h2') {
+        if (seg.start >= segments[i].start) current = segments[i];
+      }
+    }
+    for (var b = 0; b < marks.length; b++) {
+      var start = parseFloat(marks[b].getAttribute('data-start'));
+      marks[b].classList.toggle('is-active', current && start === current.start);
+    }
+  }
+
   function syncLine() {
-    if (!audio.duration || !segments.length) return;
+    if (!audio.duration || !segments.length || !lineEl) return;
     var frac = Math.max(0, Math.min(0.999, audio.currentTime / audio.duration));
     var seg = segments[segments.length - 1];
     for (var i = 0; i < segments.length; i++) {
@@ -177,17 +260,71 @@
         break;
       }
     }
-    if (seg && seg.text) lineEl.textContent = seg.text.replace(/\s+/g, ' ').trim();
+    if (seg !== activeSeg) {
+      activeSeg = seg;
+      lineEl.textContent = spokenLine(seg);
+    }
+    paintActiveMark(seg);
+  }
+
+  function setSleep(mins) {
+    if (sleepMins === mins) {
+      sleepMins = 0;
+      sleepUntil = 0;
+    } else {
+      sleepMins = mins;
+      sleepUntil = Date.now() + mins * 60 * 1000;
+    }
+    var chips = document.querySelectorAll('.listen-sleep');
+    for (var i = 0; i < chips.length; i++) {
+      chips[i].classList.toggle(
+        'is-active',
+        sleepMins > 0 && parseFloat(chips[i].getAttribute('data-sleep')) === sleepMins
+      );
+    }
+    paintSleep();
+  }
+
+  function paintSleep() {
+    if (!sleepLabel) return;
+    if (!sleepUntil || sleepUntil <= Date.now()) {
+      sleepLabel.textContent = '';
+      sleepLabel.hidden = true;
+      return;
+    }
+    sleepLabel.hidden = false;
+    sleepLabel.textContent = 'Sleep in ' + formatTime((sleepUntil - Date.now()) / 1000);
+  }
+
+  function checkSleep() {
+    if (!sleepUntil) return;
+    if (Date.now() >= sleepUntil) {
+      sleepUntil = 0;
+      sleepMins = 0;
+      if (!audio.paused) {
+        audio.pause();
+        setPlaying(false);
+      }
+      var chips = document.querySelectorAll('.listen-sleep');
+      for (var i = 0; i < chips.length; i++) chips[i].classList.remove('is-active');
+      paintSleep();
+    } else {
+      paintSleep();
+    }
   }
 
   function bindMediaSession() {
     if (!('mediaSession' in navigator)) return;
     try {
+      var absArt = artwork;
+      if (artwork && artwork.indexOf('http') !== 0) {
+        absArt = new URL(artwork, window.location.href).href;
+      }
       navigator.mediaSession.metadata = new MediaMetadata({
-        title: title,
+        title: kicker ? kicker + ' · ' + title : title,
         artist: artist,
         album: 'From Exile to Transformation',
-        artwork: artwork ? [{ src: artwork, sizes: '512x512', type: 'image/jpeg' }] : []
+        artwork: absArt ? [{ src: absArt, sizes: '512x512', type: 'image/jpeg' }] : []
       });
       navigator.mediaSession.setActionHandler('play', function () {
         audio.play().then(function () { setPlaying(true); }).catch(function () {});
@@ -199,19 +336,6 @@
       navigator.mediaSession.setActionHandler('seekbackward', function () { skip(-15); });
       navigator.mediaSession.setActionHandler('seekforward', function () { skip(15); });
     } catch (e) { /* ignore */ }
-  }
-
-  function requestWake() {
-    if (!navigator.wakeLock) return;
-    navigator.wakeLock.request('screen').then(function (lock) {
-      wakeLock = lock;
-    }).catch(function () {});
-  }
-
-  function releaseWake() {
-    if (!wakeLock) return;
-    wakeLock.release().catch(function () {});
-    wakeLock = null;
   }
 
   playBtn.addEventListener('click', toggle);
@@ -230,6 +354,13 @@
     });
   }
 
+  var sleepChips = document.querySelectorAll('.listen-sleep');
+  for (var sl = 0; sl < sleepChips.length; sl++) {
+    sleepChips[sl].addEventListener('click', function () {
+      setSleep(parseFloat(this.getAttribute('data-sleep')));
+    });
+  }
+
   wrap.addEventListener('click', seekFromEvent);
   wrap.addEventListener('keydown', function (e) {
     if (e.code === 'ArrowLeft') { e.preventDefault(); skip(-15); }
@@ -240,10 +371,12 @@
     paintTime();
     persistPosition();
     syncLine();
+    checkSleep();
   });
   audio.addEventListener('loadedmetadata', function () {
     restorePosition();
     paintTime();
+    paintLength();
   });
   audio.addEventListener('playing', function () { setPlaying(true); });
   audio.addEventListener('pause', function () { setPlaying(false); });
@@ -251,11 +384,22 @@
     setPlaying(false);
     audio.currentTime = 0;
     paintTime();
+    sleepUntil = 0;
+    sleepMins = 0;
+    var sleepOff = document.querySelectorAll('.listen-sleep');
+    for (var so = 0; so < sleepOff.length; so++) sleepOff[so].classList.remove('is-active');
+    paintSleep();
     try { localStorage.removeItem(posKey()); } catch (e) { /* ignore */ }
-    if (segments[0] && segments[0].text) lineEl.textContent = segments[0].text;
+    if (endCard) {
+      endCard.hidden = false;
+      if (nowEl) nowEl.hidden = true;
+      if (lineEl) lineEl.textContent = '';
+    } else if (segments[0] && lineEl) {
+      lineEl.textContent = spokenLine(segments[0]);
+    }
   });
   audio.addEventListener('error', function () {
-    lineEl.textContent = 'Audio could not load. Open this page from a server, not as a raw file.';
+    if (lineEl) lineEl.textContent = 'Audio could not load. Open this page from a server, not as a raw file.';
   });
 
   document.addEventListener('keydown', function (e) {
@@ -263,10 +407,6 @@
     if (e.code === 'Space') { e.preventDefault(); toggle(); }
     if (e.code === 'ArrowLeft') skip(-15);
     if (e.code === 'ArrowRight') skip(15);
-  });
-
-  document.addEventListener('visibilitychange', function () {
-    if (document.visibilityState === 'visible' && !audio.paused) requestWake();
   });
 
   loadSpoken();
