@@ -187,9 +187,15 @@ body.is-playing .listen-play-icon {
   opacity: 0;
 }
 
-body.is-playing .listen-play-ring {
+body.is-playing .listen-play-ring,
+body.is-intro .listen-play-ring {
   opacity: 1;
   animation: listen-pulse 2.6s var(--ease) infinite;
+}
+
+body.is-intro .listen-line {
+  color: rgba(245, 241, 232, 0.55);
+  font-style: italic;
 }
 
 @keyframes listen-pulse {

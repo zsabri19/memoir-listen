@@ -15,6 +15,7 @@
   var kicker = root.getAttribute('data-kicker') || '';
   var artist = root.getAttribute('data-artist') || 'Zeeshan Sabri';
   var artwork = root.getAttribute('data-artwork') || '';
+  var bedSrc = root.getAttribute('data-bed') || '';
   if (!src) return;
 
   var SPEEDS = [0.75, 1, 1.25, 1.5, 2];
@@ -30,6 +31,18 @@
   var audio = new Audio(src);
   audio.preload = 'metadata';
   audio.playbackRate = speed;
+
+  var bed = null;
+  if (bedSrc) {
+    bed = new Audio(bedSrc);
+    bed.preload = 'auto';
+    bed.volume = 0;
+  }
+  var bedFade = 0;
+  var introTimer = 0;
+  var outroTimer = 0;
+  var introPlaying = false;
+  var introDone = false;
 
   var playBtn = document.getElementById('play');
   var playIcon = document.getElementById('play-icon');
@@ -84,11 +97,92 @@
     try { localStorage.setItem(SPEED_KEY, String(speed)); } catch (e) { /* ignore */ }
   }
 
-  function toggle() {
-    if (audio.paused) {
+  function fadeBed(to, ms) {
+    if (!bed) return;
+    if (bedFade) cancelAnimationFrame(bedFade);
+    var from = bed.volume;
+    var start = performance.now();
+    if (to > 0 && bed.paused) {
+      bed.play().catch(function () {});
+    }
+    function step(now) {
+      var p = Math.min(1, (now - start) / Math.max(1, ms));
+      var eased = p * p * (3 - 2 * p);
+      bed.volume = Math.max(0, Math.min(1, from + (to - from) * eased));
+      if (p < 1) {
+        bedFade = requestAnimationFrame(step);
+      } else if (to <= 0.001) {
+        bed.pause();
+        bed.volume = 0;
+      }
+    }
+    bedFade = requestAnimationFrame(step);
+  }
+
+  function clearBedTimers() {
+    if (introTimer) {
+      clearTimeout(introTimer);
+      introTimer = 0;
+    }
+    if (outroTimer) {
+      clearTimeout(outroTimer);
+      outroTimer = 0;
+    }
+  }
+
+  function stopBed() {
+    clearBedTimers();
+    introPlaying = false;
+    document.body.classList.remove('is-intro');
+    fadeBed(0, 350);
+  }
+
+  function startIntro() {
+    introPlaying = true;
+    setPlaying(true);
+    bindMediaSession();
+    document.body.classList.add('is-intro');
+    if (nowEl) nowEl.hidden = false;
+    if (lineEl) lineEl.textContent = 'A moment.';
+    bed.currentTime = 0;
+    fadeBed(0.22, 1400);
+    introTimer = setTimeout(function () {
+      introPlaying = false;
+      introDone = true;
+      document.body.classList.remove('is-intro');
+      fadeBed(0, 2600);
       audio.play().then(function () {
         setPlaying(true);
-        bindMediaSession();
+      }).catch(function () {});
+    }, 7200);
+  }
+
+  function playOutro() {
+    if (!bed) return;
+    clearBedTimers();
+    bed.currentTime = 0;
+    fadeBed(0.18, 1600);
+    outroTimer = setTimeout(function () {
+      fadeBed(0, 2400);
+    }, 8200);
+  }
+
+  function toggle() {
+    if (introPlaying) {
+      stopBed();
+      setPlaying(false);
+      return;
+    }
+    if (audio.paused) {
+      bindMediaSession();
+      clearBedTimers();
+      if (bed && !introPlaying && bed.volume > 0.01) fadeBed(0, 280);
+      if (bed && !introDone && audio.currentTime < 2.5) {
+        startIntro();
+        return;
+      }
+      audio.play().then(function () {
+        setPlaying(true);
       }).catch(function () {});
     } else {
       audio.pause();
@@ -116,6 +210,7 @@
       var saved = parseFloat(localStorage.getItem(posKey()));
       if (isFinite(saved) && saved > 3 && saved < audio.duration - 4) {
         audio.currentTime = saved;
+        introDone = true;
         paintTime();
       }
     } catch (e) { /* ignore */ }
@@ -327,11 +422,10 @@
         artwork: absArt ? [{ src: absArt, sizes: '512x512', type: 'image/jpeg' }] : []
       });
       navigator.mediaSession.setActionHandler('play', function () {
-        audio.play().then(function () { setPlaying(true); }).catch(function () {});
+        if (audio.paused && !introPlaying) toggle();
       });
       navigator.mediaSession.setActionHandler('pause', function () {
-        audio.pause();
-        setPlaying(false);
+        if (introPlaying || !audio.paused) toggle();
       });
       navigator.mediaSession.setActionHandler('seekbackward', function () { skip(-15); });
       navigator.mediaSession.setActionHandler('seekforward', function () { skip(15); });
@@ -390,6 +484,8 @@
     for (var so = 0; so < sleepOff.length; so++) sleepOff[so].classList.remove('is-active');
     paintSleep();
     try { localStorage.removeItem(posKey()); } catch (e) { /* ignore */ }
+    introDone = false;
+    playOutro();
     if (endCard) {
       endCard.hidden = false;
       if (nowEl) nowEl.hidden = true;
