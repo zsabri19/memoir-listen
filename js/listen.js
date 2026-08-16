@@ -6,6 +6,41 @@
 (function () {
   'use strict';
 
+  var GA_ID = 'G-Z9BFJP96Q4';
+  var chapterId = (function () {
+    var parts = location.pathname.replace(/\/+$/, '').split('/');
+    var last = parts[parts.length - 1] || 'index';
+    return last === 'memoir-listen' ? 'index' : last;
+  })();
+  var playClicks = 0;
+  var heard = false;
+  var progressMarks = { 25: false, 50: false, 75: false };
+
+  function memoirTrack(name, params) {
+    params = params || {};
+    params.chapter_id = chapterId;
+    params.page_path = location.pathname;
+    try {
+      if (typeof window.gtag === 'function') window.gtag('event', name, params);
+    } catch (e) { /* ignore */ }
+  }
+
+  (function installAnalytics() {
+    window.dataLayer = window.dataLayer || [];
+    if (typeof window.gtag !== 'function') {
+      window.gtag = function () { window.dataLayer.push(arguments); };
+    }
+    if (!document.querySelector('script[src*="googletagmanager.com/gtag/js"]')) {
+      var s = document.createElement('script');
+      s.async = true;
+      s.src = 'https://www.googletagmanager.com/gtag/js?id=' + GA_ID;
+      document.head.appendChild(s);
+    }
+    window.gtag('js', new Date());
+    window.gtag('config', GA_ID, { send_page_view: true });
+    memoirTrack('listen_open', { engagement_type: 'link_open' });
+  })();
+
   var root = document.getElementById('player');
   if (!root) return;
 
@@ -187,6 +222,8 @@
       return;
     }
     if (audio.paused) {
+      playClicks += 1;
+      memoirTrack('listen_play_click', { click_count: playClicks });
       bindMediaSession();
       clearBedTimers();
       if (bed && !introPlaying && bed.volume > 0.01) fadeBed(0, 280);
@@ -612,15 +649,33 @@
     persistPosition();
     syncLine();
     checkSleep();
+    if (!audio.duration) return;
+    var pct = Math.floor((audio.currentTime / audio.duration) * 100);
+    [25, 50, 75].forEach(function (mark) {
+      if (!progressMarks[mark] && pct >= mark) {
+        progressMarks[mark] = true;
+        memoirTrack('listen_progress', { percent: mark, chapter_title: title });
+      }
+    });
   });
   audio.addEventListener('loadedmetadata', function () {
     restorePosition();
     paintTime();
     paintLength();
   });
-  audio.addEventListener('playing', function () { setPlaying(true); });
+  audio.addEventListener('playing', function () {
+    setPlaying(true);
+    if (!heard) {
+      heard = true;
+      memoirTrack('listen_play', {
+        chapter_title: title,
+        engagement_type: 'hearing',
+      });
+    }
+  });
   audio.addEventListener('pause', function () { setPlaying(false); });
   audio.addEventListener('ended', function () {
+    memoirTrack('listen_complete', { chapter_title: title });
     setPlaying(false);
     audio.currentTime = 0;
     paintTime();
