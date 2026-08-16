@@ -1,9 +1,22 @@
-# Memoir listen — selected chapters only
+# Memoir listen — audio only
 
-Audio-only pages for selected listeners. The rest of the manuscript is not in this repository.
+Separate listen pages. The manuscript is not in this repository.
 
-- Chapter 11: `/11/`
-- Chapter 13: `/13/`
-- Chapter 14: `/14/`
-- Chapter 15: `/15/`
-- Chapter 16: `/16/`
+- Prologue: `/prologue/`
+- Chapter One: `/1/`
+- Chapter Two: `/2/`
+- Chapter Three: `/3/`
+- Chapter Four: `/4/`
+- Chapter Five: `/5/`
+- Chapter Six: `/6/`
+- Chapter Seven: `/7/`
+- Chapter Eight: `/8/`
+- Chapter Nine: `/9/`
+- Chapter Ten: `/10/`
+- Chapter Eleven: `/11/`
+- Chapter Twelve: `/12/`
+- Chapter Thirteen: `/13/`
+- Chapter Fourteen: `/14/`
+- Chapter Fifteen: `/15/`
+- Chapter Sixteen: `/16/`
+- Epilogue: `/epilogue/`
