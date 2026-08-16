@@ -203,20 +203,51 @@ body.is-intro .listen-line {
   50% { box-shadow: 0 0 0 12px rgba(212, 175, 55, 0.04); }
 }
 
-.listen-progress {
+.listen-progress,
+.listen-wave {
   width: 100%;
-  height: 4px;
-  border-radius: 99px;
-  background: rgba(245, 241, 232, 0.12);
+  height: 54px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 2px;
+  padding: 10px 10px;
+  border-radius: 16px;
+  border: 1px solid rgba(212, 175, 55, 0.18);
+  background:
+    linear-gradient(180deg, rgba(35, 57, 95, 0.35), rgba(10, 16, 28, 0.45));
   cursor: pointer;
+  touch-action: none;
 }
 
-.listen-progress-fill {
-  height: 100%;
-  width: 0%;
-  border-radius: inherit;
-  background: linear-gradient(90deg, #9a7b1c, var(--gold), #f6e7ab);
-  box-shadow: 0 0 12px rgba(212, 175, 55, 0.4);
+.listen-progress-fill { display: none; }
+
+.listen-wave-bar {
+  flex: 1 1 auto;
+  min-width: 2px;
+  max-width: 4px;
+  height: 20%;
+  border-radius: 99px;
+  background: rgba(245, 241, 232, 0.16);
+  transform-origin: center;
+}
+
+.listen-wave-bar.is-played {
+  background: linear-gradient(180deg, #f6e7ab, var(--gold) 60%, #9a7b1c);
+}
+
+.listen-wave-bar.is-head {
+  background: #f6e7ab;
+  box-shadow: 0 0 10px rgba(212, 175, 55, 0.55);
+}
+
+body.is-playing .listen-wave-bar.is-head {
+  animation: wave-head 1.15s var(--ease) infinite;
+}
+
+@keyframes wave-head {
+  0%, 100% { transform: scaleY(1); }
+  50% { transform: scaleY(1.18); }
 }
 
 .listen-time {
@@ -449,5 +480,7 @@ body.is-intro .listen-line {
 }
 
 @media (prefers-reduced-motion: reduce) {
-  body.is-playing .listen-play-ring { animation: none; }
+  body.is-playing .listen-play-ring,
+  body.is-intro .listen-play-ring,
+  body.is-playing .listen-wave-bar.is-head { animation: none; }
 }

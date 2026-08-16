@@ -47,7 +47,6 @@
   var playBtn = document.getElementById('play');
   var playIcon = document.getElementById('play-icon');
   var wrap = document.getElementById('progress');
-  var fill = document.getElementById('fill');
   var elapsedEl = document.getElementById('elapsed');
   var remainEl = document.getElementById('remain');
   var lineEl = document.getElementById('line');
@@ -60,6 +59,9 @@
   var activeSeg = null;
   var sleepUntil = 0;
   var sleepMins = 0;
+  var waveBars = [];
+  var WAVE_N = 72;
+  var seeking = false;
 
   paintSpeed();
 
@@ -231,11 +233,61 @@
     if (!audio.duration) {
       elapsedEl.textContent = '0:00';
       remainEl.textContent = '0:00';
+      paintWave();
       return;
     }
     elapsedEl.textContent = formatTime(audio.currentTime);
     remainEl.textContent = formatTime(Math.max(0, audio.duration - audio.currentTime));
-    fill.style.width = ((audio.currentTime / audio.duration) * 100).toFixed(2) + '%';
+    paintWave();
+  }
+
+  function hashSeed(s) {
+    var h = 2166136261;
+    s = String(s || '');
+    for (var i = 0; i < s.length; i++) {
+      h ^= s.charCodeAt(i);
+      h = Math.imul(h, 16777619);
+    }
+    return (h >>> 0) / 4294967295;
+  }
+
+  function barHeight(i, n, seed) {
+    var x = n <= 1 ? 0 : i / (n - 1);
+    var env = Math.pow(Math.sin(Math.PI * Math.max(0.001, x)), 0.55);
+    var a = Math.abs(Math.sin(i * 1.618 + seed * 12.3));
+    var b = Math.abs(Math.sin(i * 0.41 + seed * 4.7));
+    var c = Math.abs(Math.sin(i * 0.17 + seed * 9.1));
+    var speech = 0.28 + 0.72 * a * b;
+    if (c > 0.88) speech *= 0.22;
+    if (x < 0.04 || x > 0.97) speech *= 0.45;
+    return 0.16 + 0.84 * env * speech;
+  }
+
+  function buildWave() {
+    if (!wrap) return;
+    wrap.classList.add('listen-wave');
+    wrap.innerHTML = '';
+    waveBars = [];
+    var seed = hashSeed(title + src);
+    for (var i = 0; i < WAVE_N; i++) {
+      var bar = document.createElement('span');
+      bar.className = 'listen-wave-bar';
+      bar.style.height = (barHeight(i, WAVE_N, seed) * 100).toFixed(1) + '%';
+      wrap.appendChild(bar);
+      waveBars.push(bar);
+    }
+    paintWave();
+  }
+
+  function paintWave() {
+    if (!waveBars.length) return;
+    var frac = audio.duration ? Math.max(0, Math.min(1, audio.currentTime / audio.duration)) : 0;
+    var head = Math.min(waveBars.length - 1, Math.floor(frac * waveBars.length));
+    if (frac <= 0) head = -1;
+    for (var i = 0; i < waveBars.length; i++) {
+      waveBars[i].classList.toggle('is-played', i <= head);
+      waveBars[i].classList.toggle('is-head', i === head);
+    }
   }
 
   function paintLength() {
@@ -455,7 +507,16 @@
     });
   }
 
-  wrap.addEventListener('click', seekFromEvent);
+  wrap.addEventListener('pointerdown', function (e) {
+    seeking = true;
+    if (wrap.setPointerCapture) wrap.setPointerCapture(e.pointerId);
+    seekFromEvent(e);
+  });
+  wrap.addEventListener('pointermove', function (e) {
+    if (seeking) seekFromEvent(e);
+  });
+  wrap.addEventListener('pointerup', function () { seeking = false; });
+  wrap.addEventListener('pointercancel', function () { seeking = false; });
   wrap.addEventListener('keydown', function (e) {
     if (e.code === 'ArrowLeft') { e.preventDefault(); skip(-15); }
     if (e.code === 'ArrowRight') { e.preventDefault(); skip(15); }
@@ -505,6 +566,7 @@
     if (e.code === 'ArrowRight') skip(15);
   });
 
+  buildWave();
   loadSpoken();
   bindMediaSession();
 })();
