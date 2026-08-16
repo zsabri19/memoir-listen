@@ -84,6 +84,10 @@
   var outroTimer = 0;
   var introPlaying = false;
   var introDone = false;
+  var INTRO_SEC = 7.2;
+  var introStartedAt = 0;
+  var clockIncludesIntro = false;
+  var introRaf = 0;
 
   var playBtn = document.getElementById('play');
   var playIcon = document.getElementById('play-icon');
@@ -180,13 +184,67 @@
   function stopBed() {
     clearBedTimers();
     introPlaying = false;
+    clockIncludesIntro = false;
+    introStartedAt = 0;
+    if (introRaf) {
+      cancelAnimationFrame(introRaf);
+      introRaf = 0;
+    }
     document.body.classList.remove('is-intro');
     if (creditsEl) creditsEl.classList.remove('is-dim');
     fadeBed(0, 350);
+    paintTime();
+  }
+
+  function displayElapsed() {
+    if (introPlaying && introStartedAt) {
+      return Math.max(0, Math.min(INTRO_SEC, (performance.now() - introStartedAt) / 1000));
+    }
+    var voice = audio.currentTime || 0;
+    return clockIncludesIntro ? INTRO_SEC + voice : voice;
+  }
+
+  function displayDuration() {
+    var voice = audio.duration || 0;
+    if (clockIncludesIntro || introPlaying) return INTRO_SEC + voice;
+    return voice;
+  }
+
+  function startIntroClock() {
+    if (introRaf) cancelAnimationFrame(introRaf);
+    function tick() {
+      if (!introPlaying) {
+        introRaf = 0;
+        return;
+      }
+      paintTime();
+      introRaf = requestAnimationFrame(tick);
+    }
+    introRaf = requestAnimationFrame(tick);
+  }
+
+  function finishIntro() {
+    clearBedTimers();
+    introPlaying = false;
+    introDone = true;
+    if (introRaf) {
+      cancelAnimationFrame(introRaf);
+      introRaf = 0;
+    }
+    document.body.classList.remove('is-intro');
+    if (creditsEl) creditsEl.classList.remove('is-dim');
+    if (lineEl && creditsEl) lineEl.hidden = true;
+    fadeBed(0, 2600);
+    audio.play().then(function () {
+      setPlaying(true);
+      paintTime();
+    }).catch(function () {});
   }
 
   function startIntro() {
     introPlaying = true;
+    clockIncludesIntro = true;
+    introStartedAt = performance.now();
     setPlaying(true);
     bindMediaSession();
     document.body.classList.add('is-intro');
@@ -198,17 +256,9 @@
     if (creditsEl) creditsEl.classList.add('is-dim');
     bed.currentTime = 0;
     fadeBed(0.22, 1400);
-    introTimer = setTimeout(function () {
-      introPlaying = false;
-      introDone = true;
-      document.body.classList.remove('is-intro');
-      if (creditsEl) creditsEl.classList.remove('is-dim');
-      if (lineEl && creditsEl) lineEl.hidden = true;
-      fadeBed(0, 2600);
-      audio.play().then(function () {
-        setPlaying(true);
-      }).catch(function () {});
-    }, 7200);
+    paintTime();
+    startIntroClock();
+    introTimer = setTimeout(finishIntro, INTRO_SEC * 1000);
   }
 
   function playOutro() {
@@ -246,18 +296,39 @@
     }
   }
 
-  function skip(delta) {
-    if (!audio.duration) return;
-    audio.currentTime = Math.max(0, Math.min(audio.duration, audio.currentTime + delta));
+  function seekToDisplay(t) {
+    var dur = displayDuration();
+    if (!dur) return;
+    t = Math.max(0, Math.min(dur, t));
+    if (clockIncludesIntro || introPlaying) {
+      if (t < INTRO_SEC) {
+        if (introPlaying) {
+          introStartedAt = performance.now() - t * 1000;
+          paintTime();
+          return;
+        }
+        audio.currentTime = 0;
+      } else {
+        if (introPlaying) finishIntro();
+        if (audio.duration) audio.currentTime = Math.min(audio.duration, t - INTRO_SEC);
+      }
+    } else if (audio.duration) {
+      audio.currentTime = t;
+    }
     syncLine();
+    paintTime();
+  }
+
+  function skip(delta) {
+    seekToDisplay(displayElapsed() + delta);
   }
 
   function seekFromEvent(e) {
-    if (!audio.duration) return;
+    var dur = displayDuration();
+    if (!dur) return;
     var r = wrap.getBoundingClientRect();
     var x = (e.touches && e.touches[0] ? e.touches[0].clientX : e.clientX) - r.left;
-    audio.currentTime = Math.max(0, Math.min(1, x / r.width)) * audio.duration;
-    syncLine();
+    seekToDisplay(Math.max(0, Math.min(1, x / r.width)) * dur);
   }
 
   function restorePosition() {
@@ -267,6 +338,7 @@
       if (isFinite(saved) && saved > 3 && saved < audio.duration - 4) {
         audio.currentTime = saved;
         introDone = true;
+        clockIncludesIntro = false;
         paintTime();
       }
     } catch (e) { /* ignore */ }
@@ -284,14 +356,16 @@
   }
 
   function paintTime() {
-    if (!audio.duration) {
+    var elapsed = displayElapsed();
+    var dur = displayDuration();
+    if (!dur && !introPlaying) {
       elapsedEl.textContent = '0:00';
       remainEl.textContent = '0:00';
       paintWave();
       return;
     }
-    elapsedEl.textContent = formatTime(audio.currentTime);
-    remainEl.textContent = formatTime(Math.max(0, audio.duration - audio.currentTime));
+    elapsedEl.textContent = formatTime(elapsed);
+    remainEl.textContent = formatTime(Math.max(0, (dur || INTRO_SEC) - elapsed));
     paintWave();
   }
 
@@ -335,7 +409,8 @@
 
   function paintWave() {
     if (!waveBars.length) return;
-    var frac = audio.duration ? Math.max(0, Math.min(1, audio.currentTime / audio.duration)) : 0;
+    var dur = displayDuration();
+    var frac = dur ? Math.max(0, Math.min(1, displayElapsed() / dur)) : 0;
     var head = Math.min(waveBars.length - 1, Math.floor(frac * waveBars.length));
     if (frac <= 0) head = -1;
     for (var i = 0; i < waveBars.length; i++) {
@@ -692,6 +767,8 @@
     paintSleep();
     try { localStorage.removeItem(posKey()); } catch (e) { /* ignore */ }
     introDone = false;
+    clockIncludesIntro = false;
+    introStartedAt = 0;
     playOutro();
     if (endCard) {
       endCard.hidden = false;
