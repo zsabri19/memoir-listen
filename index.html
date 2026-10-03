@@ -2,7 +2,13 @@
 <html lang="en">
 <head>
   <meta charset="utf-8" />
-  <meta name="robots" content="noindex, nofollow" />
+  <script>
+    if (location.hostname === 'zsabri19.github.io') {
+      var dest = location.pathname.replace(/^\/memoir-listen/, '') || '/';
+      location.replace('https://listen.global-mkts.com' + dest + location.search + location.hash);
+    }
+  </script>
+  <meta name="robots" content="noindex, follow" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <title>Listen · Clarity Voice</title>
   <style>
